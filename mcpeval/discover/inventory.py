@@ -44,7 +44,8 @@ def run_discovery(policy: dict[str, Any], *, endpoint: bool = True, repo: Path |
                               "env_keys": s.get("env_keys", []), "literal_secrets": s.get("literal_secrets", []), "unpinned": s.get("unpinned", False),
                               "plaintext_http": s.get("plaintext_http", False)})
         for p in ep.get("processes", []):
-            inventory.append({"source": "process", "name": p["name"], "launch": p["cmdline"], "kind": "process", "pid": p["pid"]})
+            inventory.append({"source": "process", "name": p["name"], "launch": p["cmdline"], "kind": "process", "pid": p["pid"], "bypass_flag": p.get("bypass_flag", False)})
+        result.metadata["policy_files_present"] = ep.get("policy_files_present", [])
         for e in ep.get("extensions", []):
             inventory.append({"source": e["file"], "name": e["name"], "launch": e.get("launch", ""), "kind": e["kind"]})
 
@@ -96,10 +97,21 @@ def run_discovery(policy: dict[str, Any], *, endpoint: bool = True, repo: Path |
         if item.get("plaintext_http"):
             result.findings.append(finding("SHADOW-004", "Remote MCP server over plaintext HTTP", Severity.HIGH,
                                            f"{item['source']} server `{item['name']}` uses {item['launch']}.", subj, controls=("BP-SHORT-TOKENS",)))
+    if endpoint:
+        if not result.metadata.get("policy_files_present"):
+            result.findings.append(finding("SHADOW-005", "No enterprise MCP policy files on this machine", Severity.LOW,
+                                           "None of the managed-settings / managed-mcp / requirements files of Claude Code, Claude Desktop, Copilot, Codex, Gemini CLI, Kiro or VS Code exist; "
+                                           "MCP use on this endpoint is governed only by the user.", "endpoint", controls=("SEC-SHADOW", "BP-SECURE-DEFAULT"),
+                                           remediation="Deploy allow/deny lists via MDM (see docs/SHADOW.md section 5).", confidence=Confidence.MEDIUM))
+        for item in inventory:
+            if item.get("bypass_flag"):
+                result.findings.append(finding("SHADOW-006", "Agent running with permission prompts disabled", Severity.HIGH,
+                                               f"Process {item.get('pid')} `{item['launch'][:120]}` runs with a confirmation-bypass flag; any MCP tool it has is executed without HITL.",
+                                               f"pid:{item.get('pid')}", controls=("BP-SECURE-DEFAULT", "BP-HITL-DML"), remediation="Block these flags with managed settings (Claude Code: permissions.disableBypassPermissionsMode) and alert on them in EDR."))
     for iss in aws_issues:
         ctl = (iss.get("control"),) if iss.get("control") else (("BP-NON-ROOT", "BP-LEAST-PRIV") if "root" in iss["title"].lower() else ("BP-LEAST-PRIV",))
         result.findings.append(finding("SHADOW-AWS", iss["title"], Severity(iss["severity"]), iss["message"], iss["subject"], controls=ctl))
-    result.checks_run = ["SHADOW-001", "SHADOW-002", "SHADOW-003", "SHADOW-004", "SHADOW-AWS"]
+    result.checks_run = ["SHADOW-001", "SHADOW-002", "SHADOW-003", "SHADOW-004", "SHADOW-005", "SHADOW-006", "SHADOW-AWS"]
     result.finished_at = datetime.now(timezone.utc)
     blocking = sorted({f.check_id for f in result.findings if f.severity.rank >= Severity.HIGH.rank})
     result.gate = {"passed": not blocking, "reason": (f"{len(inventory)} servers inventoried; blocking: {', '.join(blocking)}" if blocking else f"{len(inventory)} servers inventoried, nothing blocking")}

@@ -59,4 +59,11 @@ promptfoo has an MCP provider (server under test, model-free `tools/call`) and a
 
 ## 8. Shadow MCP detection
 
-See `discover/endpoint.py` for the client config locations and `docs/AWS.md` for the cloud side. (Endpoint-side research notes are appended below when the final pass completes.)
+Full playbook in `docs/SHADOW.md`. Verified points that shaped `discover/`: about 30 clients keep MCP servers in files with six different top-level keys
+(`mcpServers`, `servers`, `context_servers`, `extensions`, `mcp_servers`, `mcp.servers`); a few keep them in databases (Open WebUI, Cherry Studio, Docker Toolkit) or
+server-side (ChatGPT); Devin and Warp import other clients' configs; Claude Desktop logs and Claude Code transcripts record every server actually used.
+Microsoft Defender for Endpoint gained native MCP discovery on 2026-11-05 and Fleet osquery has `ai_tools` / `mcp_listening_servers` tables; SigmaHQ has no merged MCP
+rules; Elastic's detection-rules repo is the best public rule set. On the network, Netskope, Cloudflare One, Zscaler and Palo Alto all shipped MCP-aware
+controls in 2026, and there are no public Suricata/Zeek signatures. Enterprise allowlists exist for Claude Code, Claude Desktop, Copilot, VS Code, Cursor,
+Kiro, Codex and Gemini CLI, all with exact keys documented in `docs/SHADOW.md`; Warp has none. Hosted-endpoint watchlist: `mcpeval/discover/mcp_hosts.yaml`
+(about 50 vendor-documented hosts, 9 probe-only). Not verified: on-disk paths for JetBrains AI Assistant, Copilot in JetBrains/VS/Xcode, Raycast, LM Studio (vendor docs silent).
