@@ -1,0 +1,50 @@
+rules:
+  - id: mcp-destructive-tool-missing-annotations-python
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Tool `$FUNC` has a name that suggests it mutates or destroys state but is
+      registered without `annotations=` (ToolAnnotations: readOnlyHint,
+      destructiveHint, idempotentHint, openWorldHint). Hosts use these hints to
+      decide when to require human confirmation. Declare
+      annotations=ToolAnnotations(destructiveHint=True, ...) (or readOnlyHint=True
+      if the name is misleading).
+    metadata:
+      cwe: "CWE-1059: Insufficient Technical Documentation"
+      category: security
+      subcategory: [audit]
+      confidence: LOW
+      likelihood: LOW
+      impact: MEDIUM
+      technology: [mcp, fastmcp]
+      references:
+        - https://modelcontextprotocol.io/specification/2025-11-25/server/tools#tool-annotations
+    patterns:
+      - pattern-either:
+          - pattern: |
+              @$MCP.tool(...)
+              def $FUNC(...):
+                  ...
+          - pattern: |
+              @$MCP.tool
+              def $FUNC(...):
+                  ...
+          - pattern: |
+              @$MCP.tool(...)
+              async def $FUNC(...):
+                  ...
+          - pattern: |
+              @$MCP.tool
+              async def $FUNC(...):
+                  ...
+      - pattern-not: |
+          @$MCP.tool(..., annotations=$A, ...)
+          def $FUNC(...):
+              ...
+      - pattern-not: |
+          @$MCP.tool(..., annotations=$A, ...)
+          async def $FUNC(...):
+              ...
+      - metavariable-regex:
+          metavariable: $FUNC
+          regex: (?i)^(delete|remove|drop|destroy|purge|rm|wipe|truncate|reset|terminate|kill|write|update|modify|set|put|post|send|email|pay|transfer|charge|exec|execute|run|deploy|restart|shutdown|revoke|create|upload|publish)([_a-z0-9].*)?$

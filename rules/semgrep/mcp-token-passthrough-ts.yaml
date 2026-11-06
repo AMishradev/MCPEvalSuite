@@ -1,0 +1,47 @@
+rules:
+  - id: mcp-token-passthrough-ts
+    mode: taint
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      The bearer token / Authorization header received from the MCP client is
+      forwarded to an upstream HTTP request. The MCP authorization spec says an MCP
+      server "MUST NOT pass through the token it received from the MCP client".
+      Obtain a separate upstream token (token exchange or server-held credential).
+    metadata:
+      cwe: "CWE-441: Unintended Proxy or Intermediary ('Confused Deputy')"
+      category: security
+      subcategory: [vuln]
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+      technology: [mcp, "@modelcontextprotocol/sdk"]
+      references:
+        - https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices#token-passthrough
+    pattern-sources:
+      - pattern: $REQ.headers.authorization
+      - pattern: $REQ.headers["authorization"]
+      - pattern: $REQ.headers["Authorization"]
+      - pattern: $REQ.headers.get("authorization")
+      - pattern: $REQ.headers.get("Authorization")
+      - pattern: $REQ.header("authorization")
+      - pattern: $REQ.header("Authorization")
+      - pattern: $EXTRA.authInfo.token
+      - pattern: $REQ.auth.token
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: fetch($U, $OPTS)
+              - pattern: axios($OPTS)
+              - pattern: axios($U, $OPTS)
+              - pattern: axios.$M($U, $OPTS)
+              - pattern: axios.$M($U, $BODY, $OPTS)
+              - pattern: got($U, $OPTS)
+          - focus-metavariable: $OPTS
+      - patterns:
+          - pattern-either:
+              - pattern: $H.set("Authorization", $T)
+              - pattern: $H.set("authorization", $T)
+              - pattern: $H.append("Authorization", $T)
+              - pattern: $REQ.setHeader("Authorization", $T)
+          - focus-metavariable: $T

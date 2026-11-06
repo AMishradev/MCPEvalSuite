@@ -1,0 +1,36 @@
+# GitHub Actions: gate an MCP server repo on every PR.
+# 1. static lane on the source tree          2. live scan of the server (stdio)        3. upload SARIF to code scanning
+name: mcpeval
+on: [pull_request, push]
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  mcpeval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install "git+https://github.com/AMishradev/MCPEvalSuite" && pipx install semgrep
+      - name: static lane
+        run: mcpeval static . --out out/static --no-gate
+      - name: live scan (stdio)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}   # optional: enables the LLM lane (cost ledger in out/)
+        run: mcpeval scan "stdio:python server.py" --out out/scan --budget-usd 0.50
+      - name: upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: out/scan/mcpeval.sarif
+          category: mcpeval-scan
+      - name: upload static SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: out/static/mcpeval.sarif
+          category: mcpeval-static
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: mcpeval-reports, path: out/ }

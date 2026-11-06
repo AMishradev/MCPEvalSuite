@@ -1,0 +1,72 @@
+rules:
+  - id: mcp-tool-arg-path-traversal-python
+    mode: taint
+    languages: [python]
+    severity: ERROR
+    message: >-
+      An MCP tool argument ($PARAM) is used as a filesystem path without
+      canonicalisation and a root-directory check. A model (or prompt-injected
+      content) can pass '../' sequences or absolute paths to read or write files
+      outside the intended directory. Resolve the path (Path.resolve()/os.path.realpath)
+      and reject it unless it is_relative_to() an allow-listed root.
+    metadata:
+      cwe: "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+      category: security
+      subcategory: [vuln]
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+      technology: [mcp, fastmcp]
+      references:
+        - https://modelcontextprotocol.io/docs/tutorials/security/local-server-security
+        - https://github.com/advisories/GHSA-vjqx-cfc4-9h6v
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: |
+                  @$SERVER.tool(...)
+                  def $FUNC(..., $PARAM, ...):
+                      ...
+              - pattern: |
+                  @$SERVER.tool
+                  def $FUNC(..., $PARAM, ...):
+                      ...
+              - pattern: |
+                  @$SERVER.tool(...)
+                  async def $FUNC(..., $PARAM, ...):
+                      ...
+          - focus-metavariable: $PARAM
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: open($S, ...)
+              - pattern: aiofiles.open($S, ...)
+              - pattern: os.remove($S)
+              - pattern: os.unlink($S)
+              - pattern: os.listdir($S)
+              - pattern: shutil.rmtree($S, ...)
+              - pattern: shutil.copy($S, ...)
+              - pattern: shutil.copy($X, $S)
+              - pattern: Path($S).read_text(...)
+              - pattern: Path($S).write_text(...)
+              - pattern: Path($S).open(...)
+              - pattern: Path($S).unlink(...)
+              - pattern: pathlib.Path($S).read_text(...)
+              - pattern: pathlib.Path($S).write_text(...)
+          - focus-metavariable: $S
+    pattern-sanitizers:
+      - pattern: os.path.basename(...)
+      - pattern: werkzeug.utils.secure_filename(...)
+      - pattern: secure_filename(...)
+      - pattern: safe_join(...)
+      - pattern: validate_path(...)
+      - pattern: resolve_safe_path(...)
+      # A path that has been resolved and checked against a root is considered safe.
+      - patterns:
+          - pattern-inside: |
+              $P = $ROOT.joinpath($A).resolve()
+              ...
+              if not $P.is_relative_to($ROOT):
+                  ...
+              ...
+          - pattern: $P

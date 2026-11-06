@@ -1,0 +1,50 @@
+rules:
+  - id: mcp-tool-arg-to-command-exec-ts
+    mode: taint
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      An argument of an MCP tool handler (registered via server.tool()/server.registerTool())
+      reaches a command-execution or code-evaluation sink (child_process.exec/execSync,
+      spawn with shell:true, eval, new Function, vm.runIn*Context). Use execFile/spawn
+      with an argv array and shell:false, and allow-list values.
+    metadata:
+      cwe: "CWE-78: Improper Neutralization of Special Elements used in an OS Command"
+      category: security
+      subcategory: [vuln]
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+      technology: [mcp, "@modelcontextprotocol/sdk"]
+      references:
+        - https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern-inside: $SERVER.registerTool($NAME, $CFG, $HANDLER)
+              - pattern-inside: $SERVER.tool($NAME, ..., $HANDLER)
+          - pattern-either:
+              - pattern: async ($ARGS, ...) => { ... }
+              - pattern: ($ARGS, ...) => { ... }
+              - pattern: async function ($ARGS, ...) { ... }
+              - pattern: function ($ARGS, ...) { ... }
+          - focus-metavariable: $ARGS
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: exec($S, ...)
+              - pattern: execSync($S, ...)
+              - pattern: $CP.exec($S, ...)
+              - pattern: $CP.execSync($S, ...)
+              - pattern: 'spawn($S, ..., {..., shell: true, ...})'
+              - pattern: 'spawnSync($S, ..., {..., shell: true, ...})'
+              - pattern: '$CP.spawn($S, ..., {..., shell: true, ...})'
+              - pattern: execaCommand($S, ...)
+              - pattern: eval($S)
+              - pattern: new Function(..., $S)
+              - pattern: vm.runInNewContext($S, ...)
+              - pattern: vm.runInThisContext($S, ...)
+          - focus-metavariable: $S
+    pattern-sanitizers:
+      - pattern: shellEscape(...)
+      - pattern: shellQuote.quote(...)

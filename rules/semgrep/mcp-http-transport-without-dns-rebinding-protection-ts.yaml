@@ -1,0 +1,31 @@
+rules:
+  - id: mcp-http-transport-without-dns-rebinding-protection-ts
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      An HTTP MCP transport is created without `enableDnsRebindingProtection: true`
+      (and `allowedHosts`/`allowedOrigins`), or the HTTP server is bound to 0.0.0.0.
+      Local HTTP MCP servers reachable from a browser are exploitable via DNS rebinding
+      / CSRF (cf. MCP Inspector CVE-2025-49596). Enable Host/Origin validation, bind to
+      127.0.0.1 unless remote access is intended, and require authentication for any
+      non-loopback bind.
+    metadata:
+      cwe: "CWE-346: Origin Validation Error"
+      category: security
+      subcategory: [audit]
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+      technology: [mcp, "@modelcontextprotocol/sdk"]
+      references:
+        - https://github.com/advisories/GHSA-7f8r-222p-6f5g
+        - https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#security-warning
+    patterns:
+      - pattern-either:
+          - patterns:
+              - pattern-either:
+                  - pattern: new StreamableHTTPServerTransport({...})
+                  - pattern: new SSEServerTransport($ENDPOINT, $RES, {...})
+              - pattern-not: 'new StreamableHTTPServerTransport({..., enableDnsRebindingProtection: true, ...})'
+              - pattern-not: 'new SSEServerTransport($ENDPOINT, $RES, {..., enableDnsRebindingProtection: true, ...})'
+          - pattern: $APP.listen($PORT, "0.0.0.0", ...)

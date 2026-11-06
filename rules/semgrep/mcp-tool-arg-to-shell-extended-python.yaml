@@ -1,0 +1,61 @@
+rules:
+  - id: mcp-tool-arg-to-shell-extended-python
+    mode: taint
+    languages: [python]
+    severity: ERROR
+    message: >-
+      An MCP tool argument ($PARAM) reaches an OS command / code-evaluation sink.
+      Covers the bare `@mcp.tool` decorator form and sinks missed by the upstream
+      semgrep-rules `mcp-command-injection-python` rule (os.popen, subprocess.getoutput,
+      asyncio.create_subprocess_shell, check_output/check_call with shell=True).
+      Pass argv as a list with shell=False, allow-list values, or use shlex.quote().
+    metadata:
+      cwe: "CWE-78: Improper Neutralization of Special Elements used in an OS Command"
+      category: security
+      subcategory: [vuln]
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+      technology: [mcp, fastmcp]
+      references:
+        - https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices
+        - https://github.com/semgrep/semgrep-rules/issues/4127
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: |
+                  @$SERVER.tool(...)
+                  def $FUNC(..., $PARAM, ...):
+                      ...
+              - pattern: |
+                  @$SERVER.tool
+                  def $FUNC(..., $PARAM, ...):
+                      ...
+              - pattern: |
+                  @$SERVER.tool(...)
+                  async def $FUNC(..., $PARAM, ...):
+                      ...
+              - pattern: |
+                  @$SERVER.tool
+                  async def $FUNC(..., $PARAM, ...):
+                      ...
+          - focus-metavariable: $PARAM
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: os.popen($S, ...)
+              - pattern: os.system($S)
+              - pattern: subprocess.getoutput($S, ...)
+              - pattern: subprocess.getstatusoutput($S, ...)
+              - pattern: asyncio.create_subprocess_shell($S, ...)
+              - pattern: subprocess.check_output($S, ..., shell=True, ...)
+              - pattern: subprocess.check_call($S, ..., shell=True, ...)
+              - pattern: subprocess.run($S, ..., shell=True, ...)
+              - pattern: subprocess.call($S, ..., shell=True, ...)
+              - pattern: subprocess.Popen($S, ..., shell=True, ...)
+              - pattern: eval($S, ...)
+              - pattern: exec($S, ...)
+          - focus-metavariable: $S
+    pattern-sanitizers:
+      - pattern: shlex.quote(...)
+      - pattern: shlex.split(...)

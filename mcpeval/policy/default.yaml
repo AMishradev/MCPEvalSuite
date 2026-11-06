@@ -1,0 +1,117 @@
+# MCPEvalSuite default policy — encodes the AppSec "MCP best practices" document as controls.
+# Every check references one or more control IDs; the gate decides pass/fail from findings.
+#
+# Override per-repo with .mcpeval/policy.yaml (same schema). Keys:
+#   controls:   control catalogue (documentation + mappings)
+#   checks:     per-check overrides {enabled: bool, severity: str}
+#   gate:       CI gate thresholds
+#   naming:     naming-convention parameters
+#   categories: HITL expectations per category
+#   allowlist:  sanctioned servers for discovery (shadow MCP) comparison
+
+version: 1
+
+controls:
+  BP-CATEGORIZE:
+    title: "Organize tools by CRUD-like category (Read / Aggregate / DML / DDL)"
+    text: "Group tools so least-privilege authorization can be designed per category."
+  BP-HITL-DML:
+    title: "HITL highly recommended for DML tools"
+  BP-HITL-DDL:
+    title: "HITL REQUIRED for DDL tools; autonomous agentic use denied"
+  BP-NAMING:
+    title: "Tool names carry backend + action verb (snow_get_ticket) to avoid collisions"
+  BP-DECOUPLE:
+    title: "Separate mutable tool operations from non-mutable resource operations"
+  BP-LAZY-FETCH:
+    title: "Lazy fetch / dynamic routing of tools to avoid token waste"
+  BP-STRUCTURE:
+    title: "Router / tool-group server-side structure"
+  BP-IDEMPOTENT:
+    title: "Tool outcomes deterministic / idempotent (create-if-absent, update-if-present)"
+  BP-LEAST-PRIV:
+    title: "Principle of least privilege"
+  BP-SHORT-TOKENS:
+    title: "No long-lived tokens; short-lived, rotated, audience-restricted"
+  BP-ROLE-SEPARATION:
+    title: "Human and agent roles in separate lanes"
+  BP-AUTH-LOGGING:
+    title: "Log all authN and authZ activity"
+  BP-PKCE:
+    title: "PKCE for OAuth flows"
+  BP-HITL-IMPACT:
+    title: "Confirmation messages state the impact explicitly (what, where, account)"
+  BP-INPUT-VALIDATION:
+    title: "Validate inputs before any mutating action"
+  BP-SECURE-DEFAULT:
+    title: "HITL is the default behaviour"
+  BP-ENV-ISOLATION:
+    title: "Do not co-mingle prod and non-prod MCP infrastructure"
+  BP-NON-ROOT:
+    title: "Never run the MCP process as root in a container"
+  BP-SIGNED:
+    title: "Only signed components; sign before publishing"
+  # Cross-cutting (not in the doc but required to make the doc's controls meaningful)
+  SEC-TOOL-POISONING:
+    title: "No hidden instructions / injection in tool descriptions or schemas"
+  SEC-RUG-PULL:
+    title: "Tool definitions must not drift from the approved baseline"
+  SEC-SECRETS:
+    title: "No credentials in tool definitions or client configs"
+  SEC-SHADOW:
+    title: "Every MCP server in use is on the sanctioned inventory"
+
+naming:
+  # <backend>_<verb>_<noun...> ; snake_case ; verbs from the lexicon
+  pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+){1,}$"
+  require_backend_prefix: true
+  max_length: 64
+  # Accepted backend prefixes (empty = any). Populate per org, e.g. [snow, jira, aws, gh, slack]
+  known_backends: []
+  # AgentCore Gateway prefixes tools as target___tool ; accept that separator too
+  accept_gateway_separator: true
+
+categories:
+  read:      {hitl: optional,    autonomous: allowed}
+  aggregate: {hitl: optional,    autonomous: allowed}
+  dml:       {hitl: recommended, autonomous: allowed_with_hitl}
+  ddl:       {hitl: required,    autonomous: denied}
+  unknown:   {hitl: required,    autonomous: denied}   # fail closed
+
+lazy_fetch:
+  max_tools_per_server: 40          # above this, require gateway/semantic search/lazy discovery
+  max_definition_tokens: 12000      # approximate tokens for the full tools/list payload
+  max_description_chars: 1500
+
+classifier:
+  llm_enabled: true                 # LLM lane runs when ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN is set
+  llm_model: "claude-opus-5-5"      # claude-haiku-5-5 is ~40x cheaper per token for this task; change here if budget matters more than accuracy
+  max_usd_per_scan: 1.00            # hard stop per scan; every call is logged to $MCPEVAL_HOME/llm_costs.jsonl
+  escalate_below_confidence: 0.6    # only tools the heuristics could not classify go to the model (mode "escalate")
+  prices: {}                        # override USD per 1M tokens: {claude-opus-5-5: [input, output, cache_read, cache_write]}
+
+auth:
+  max_token_lifetime_seconds: 3600  # JWT exp-iat above this is a finding
+
+max_findings_per_check: 15
+
+supply_chain:
+  allowed_source_repos: []          # e.g. [modelcontextprotocol/servers, awslabs/mcp, your-org/*] ; empty = any provenance accepted
+  cosign_identity_regexp: ""        # keyless identity for your own images, e.g. ^https://github.com/your-org/
+  cosign_oidc_issuer: https://token.actions.githubusercontent.com          # roll up noisier checks into one finding with the subject list
+
+gate:
+  fail_on: high                     # fail CI if any finding >= this severity
+  fail_on_controls: [BP-HITL-DDL, BP-PKCE, BP-NON-ROOT, SEC-TOOL-POISONING, SEC-SECRETS]
+  max_unknown_category_ratio: 0.2   # more than 20% unclassifiable tools fails the gate
+
+checks: {}   # e.g.  NAME-001: {severity: low}   or   LAZY-001: {enabled: false}
+
+allowlist:
+  # Sanctioned servers for shadow-MCP comparison. Match on command/package/url.
+  servers: []
+  # e.g.
+  # - name: aws-api
+  #   match: {package: "awslabs.aws-api-mcp-server"}
+  # - name: internal-snow
+  #   match: {url_prefix: "https://mcp.internal.example.com/snow"}

@@ -1,0 +1,26 @@
+rules:
+  - id: mcp-oauth-authorize-request-missing-pkce-ts
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      An OAuth authorization request (response_type=code) is built without a PKCE
+      code_challenge. MCP clients MUST implement PKCE with S256 and MUST refuse to
+      proceed when the authorization server metadata lacks
+      code_challenge_methods_supported. Add code_challenge/code_challenge_method=S256
+      (and the RFC 8707 `resource` parameter).
+    metadata:
+      cwe: "CWE-287: Improper Authentication"
+      category: security
+      subcategory: [vuln]
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+      technology: [mcp, oauth]
+      references:
+        - https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#authorization-code-protection
+    patterns:
+      - pattern-either:
+          - pattern: 'new URLSearchParams({..., response_type: "code", ...})'
+          - pattern: 'new URLSearchParams({..., "response_type": "code", ...})'
+      - pattern-not: 'new URLSearchParams({..., code_challenge: $C, ...})'
+      - pattern-not: 'new URLSearchParams({..., "code_challenge": $C, ...})'

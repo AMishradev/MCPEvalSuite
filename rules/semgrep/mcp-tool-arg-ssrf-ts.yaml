@@ -1,0 +1,52 @@
+rules:
+  - id: mcp-tool-arg-ssrf-ts
+    mode: taint
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      An MCP tool argument is used as (or inside) the URL of an outbound HTTP
+      request. A model can be steered to request internal addresses
+      (169.254.169.254, localhost admin ports, private ranges). Parse the URL,
+      allow-list scheme+host, and block link-local/private ranges before fetching.
+    metadata:
+      cwe: "CWE-918: Server-Side Request Forgery (SSRF)"
+      category: security
+      subcategory: [vuln]
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+      technology: [mcp, "@modelcontextprotocol/sdk"]
+      references:
+        - https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern-inside: $SERVER.registerTool($NAME, $CFG, $HANDLER)
+              - pattern-inside: $SERVER.tool($NAME, ..., $HANDLER)
+          - pattern-either:
+              - pattern: async ($ARGS, ...) => { ... }
+              - pattern: ($ARGS, ...) => { ... }
+              - pattern: async function ($ARGS, ...) { ... }
+          - focus-metavariable: $ARGS
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: fetch($U, ...)
+              - pattern: axios($U, ...)
+              - pattern: axios.get($U, ...)
+              - pattern: axios.post($U, ...)
+              - pattern: axios.put($U, ...)
+              - pattern: axios.delete($U, ...)
+              - pattern: 'axios({..., url: $U, ...})'
+              - pattern: got($U, ...)
+              - pattern: got.get($U, ...)
+              - pattern: http.get($U, ...)
+              - pattern: https.get($U, ...)
+              - pattern: http.request($U, ...)
+              - pattern: https.request($U, ...)
+          - focus-metavariable: $U
+    pattern-sanitizers:
+      - pattern: isAllowedUrl(...)
+      - pattern: assertAllowedUrl(...)
+      - pattern: validateUrl(...)
+      - pattern: toSafeUrl(...)

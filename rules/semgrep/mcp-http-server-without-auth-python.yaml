@@ -1,0 +1,51 @@
+rules:
+  - id: mcp-http-server-without-auth-python
+    languages: [python]
+    severity: WARNING
+    message: >-
+      This MCP server is exposed over a network transport (SSE / Streamable HTTP)
+      or bound to 0.0.0.0, but the FastMCP instance was constructed without an
+      `auth=` / `token_verifier=` provider. Anyone who can reach the port can call
+      every tool. Configure bearer-token/OAuth verification (MCP authorization spec,
+      RFC 9728 protected-resource metadata) or bind to 127.0.0.1 behind an
+      authenticating proxy.
+    metadata:
+      cwe: "CWE-306: Missing Authentication for Critical Function"
+      category: security
+      subcategory: [audit]
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+      technology: [mcp, fastmcp]
+      references:
+        - https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
+    patterns:
+      - pattern-either:
+          - patterns:
+              - pattern-either:
+                  - pattern: $MCP.run(..., transport="sse", ...)
+                  - pattern: $MCP.run(..., transport="streamable-http", ...)
+                  - pattern: $MCP.run(..., transport="http", ...)
+                  - pattern: $MCP.run(..., host="0.0.0.0", ...)
+                  - pattern: $MCP.run_async(..., transport="http", ...)
+                  - pattern: $MCP.run_async(..., transport="sse", ...)
+                  - pattern: $MCP.run_async(..., transport="streamable-http", ...)
+              - pattern-either:
+                  - pattern-inside: |
+                      $MCP = FastMCP(...)
+                      ...
+                  - pattern-inside: |
+                      $MCP = MCPServer(...)
+                      ...
+              - pattern-not-inside: |
+                  $MCP = $CLS(..., auth=$AUTH, ...)
+                  ...
+              - pattern-not-inside: |
+                  $MCP = $CLS(..., token_verifier=$TV, ...)
+                  ...
+          - patterns:
+              - pattern-either:
+                  - pattern: FastMCP(..., host="0.0.0.0", ...)
+                  - pattern: MCPServer(..., host="0.0.0.0", ...)
+              - pattern-not: $CLS(..., auth=$AUTH, ...)
+              - pattern-not: $CLS(..., token_verifier=$TV, ...)

@@ -1,0 +1,47 @@
+rules:
+  - id: mcp-token-passthrough-python
+    mode: taint
+    languages: [python]
+    severity: ERROR
+    message: >-
+      The bearer token / Authorization header received from the MCP client is
+      forwarded to an upstream HTTP API. The MCP authorization spec says an MCP
+      server "MUST NOT pass through the token it received from the MCP client";
+      upstream calls must use a separate token issued for that upstream (token
+      exchange or a server-held credential).
+    metadata:
+      cwe: "CWE-441: Unintended Proxy or Intermediary ('Confused Deputy')"
+      category: security
+      subcategory: [vuln]
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+      technology: [mcp, fastmcp]
+      references:
+        - https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#access-token-privilege-restriction
+        - https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices#token-passthrough
+    pattern-sources:
+      - pattern: get_http_headers()
+      - pattern: get_access_token()
+      - pattern: get_access_token().token
+      - pattern: $REQ.headers["Authorization"]
+      - pattern: $REQ.headers["authorization"]
+      - pattern: $REQ.headers.get("Authorization", ...)
+      - pattern: $REQ.headers.get("authorization", ...)
+      - pattern: $CTX.request_context.request.headers
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: requests.$M(..., headers=$H, ...)
+              - pattern: httpx.$M(..., headers=$H, ...)
+              - pattern: $CLIENT.get(..., headers=$H, ...)
+              - pattern: $CLIENT.post(..., headers=$H, ...)
+              - pattern: $CLIENT.put(..., headers=$H, ...)
+              - pattern: $CLIENT.patch(..., headers=$H, ...)
+              - pattern: $CLIENT.delete(..., headers=$H, ...)
+              - pattern: $CLIENT.request(..., headers=$H, ...)
+              - pattern: urllib.request.Request(..., headers=$H, ...)
+          - focus-metavariable: $H
+      - patterns:
+          - pattern: $REQ.add_header("Authorization", $T)
+          - focus-metavariable: $T

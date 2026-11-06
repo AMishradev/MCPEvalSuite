@@ -1,0 +1,43 @@
+# Hosted MCP endpoints to watch in DNS / proxy / Route 53 Resolver logs (shadow MCP, network side).
+# verified: true  = the host answered an MCP request or published RFC 9728 metadata when checked on 2026-11-06.
+# verified: false = taken from vendor documentation or announcements; confirm before alerting on it.
+# Use with Route 53 DNS Firewall (ALERT first, then BLOCK) or your SASE/CASB custom category.
+hosts:
+  - {host: mcp.sentry.dev,            vendor: Sentry,       verified: true}
+  - {host: mcp.notion.com,            vendor: Notion,       verified: true}
+  - {host: mcp.linear.app,            vendor: Linear,       verified: false}
+  - {host: mcp.atlassian.com,         vendor: Atlassian,    verified: false}
+  - {host: mcp.stripe.com,            vendor: Stripe,       verified: false}
+  - {host: api.githubcopilot.com,     vendor: GitHub,       verified: false, path: /mcp}
+  - {host: mcp.cloudflare.com,        vendor: Cloudflare,   verified: false, note: "many service subdomains, e.g. docs.mcp.cloudflare.com"}
+  - {host: mcp.zapier.com,            vendor: Zapier,       verified: false}
+  - {host: mcp.composio.dev,          vendor: Composio,     verified: false}
+  - {host: connect.composio.dev,      vendor: Composio,     verified: false}
+  - {host: server.smithery.ai,        vendor: Smithery,     verified: false}
+  - {host: mcp.pipedream.net,         vendor: Pipedream,    verified: false}
+  - {host: mcp.asana.com,             vendor: Asana,        verified: false}
+  - {host: mcp.paypal.com,            vendor: PayPal,       verified: false}
+  - {host: mcp.hubspot.com,           vendor: HubSpot,      verified: false}
+  - {host: mcp.intercom.com,          vendor: Intercom,     verified: false}
+  - {host: mcp.canva.com,             vendor: Canva,        verified: false}
+  - {host: mcp.figma.com,             vendor: Figma,        verified: false}
+  - {host: mcp.deepwiki.com,          vendor: DeepWiki,     verified: false}
+  - {host: mcp.context7.com,          vendor: Context7,     verified: false}
+  - {host: mcp.exa.ai,                vendor: Exa,          verified: false}
+  - {host: mcp.supabase.com,          vendor: Supabase,     verified: false}
+  - {host: mcp.vercel.com,            vendor: Vercel,       verified: false}
+  - {host: mcp.neon.tech,             vendor: Neon,         verified: false}
+  - {host: mcp.squareup.com,          vendor: Square,       verified: false}
+  - {host: mcp.plaid.com,             vendor: Plaid,        verified: false}
+  - {host: mcp.webflow.com,           vendor: Webflow,      verified: false}
+  - {host: aws-mcp.us-east-1.api.aws, vendor: AWS,          verified: false, note: "managed AWS MCP Server; one host per region (aws-mcp.<region>.api.aws)"}
+  - {host: knowledge-mcp.global.api.aws, vendor: AWS,       verified: false, note: "AWS Knowledge MCP, unauthenticated"}
+  - {host: agent-registry.us-east-1.api.aws, vendor: AWS,   verified: false, note: "AWS Agent Registry MCP endpoint; one host per region"}
+
+# Protocol fingerprints for proxies that can see headers (TLS inspection or forward proxy):
+fingerprints:
+  request_headers: ["MCP-Protocol-Version", "Mcp-Method", "Mcp-Name", "Mcp-Session-Id"]
+  accept: "application/json, text/event-stream"
+  well_known_paths: ["/.well-known/oauth-protected-resource", "/.well-known/oauth-authorization-server", "/.well-known/mcp-registry-auth", "/.well-known/ai-catalog.json"]
+  common_paths: ["/mcp", "/sse", "/messages", "/server-card"]
+  jsonrpc_methods: ["server/discover", "initialize", "tools/list", "tools/call", "resources/list", "prompts/list", "subscriptions/listen"]

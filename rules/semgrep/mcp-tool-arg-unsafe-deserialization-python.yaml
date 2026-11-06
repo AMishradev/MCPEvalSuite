@@ -1,0 +1,48 @@
+rules:
+  - id: mcp-tool-arg-unsafe-deserialization-python
+    mode: taint
+    languages: [python]
+    severity: ERROR
+    message: >-
+      An MCP tool argument ($PARAM) is passed to an unsafe deserializer
+      (pickle/marshal/dill/jsonpickle/yaml.load with a non-safe Loader). A model can
+      be induced to pass attacker-controlled bytes, giving arbitrary code execution
+      in the server process. Use json, yaml.safe_load, or a schema-validated format.
+    metadata:
+      cwe: "CWE-502: Deserialization of Untrusted Data"
+      category: security
+      subcategory: [vuln]
+      confidence: HIGH
+      likelihood: LOW
+      impact: HIGH
+      technology: [mcp, fastmcp]
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: |
+                  @$SERVER.tool(...)
+                  def $FUNC(..., $PARAM, ...):
+                      ...
+              - pattern: |
+                  @$SERVER.tool
+                  def $FUNC(..., $PARAM, ...):
+                      ...
+              - pattern: |
+                  @$SERVER.tool(...)
+                  async def $FUNC(..., $PARAM, ...):
+                      ...
+          - focus-metavariable: $PARAM
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: pickle.loads($S, ...)
+              - pattern: pickle.load($S, ...)
+              - pattern: marshal.loads($S)
+              - pattern: dill.loads($S)
+              - pattern: jsonpickle.decode($S, ...)
+              - pattern: yaml.unsafe_load($S)
+              - pattern: yaml.load($S, Loader=yaml.Loader)
+              - pattern: yaml.load($S, Loader=yaml.UnsafeLoader)
+              - pattern: yaml.load($S, Loader=yaml.FullLoader)
+              - pattern: yaml.load($S)
+          - focus-metavariable: $S

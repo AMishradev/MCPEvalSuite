@@ -1,0 +1,24 @@
+# AWS CodeBuild buildspec: same gate, findings pushed to Security Hub CSPM as ASFF.
+version: 0.2
+env:
+  variables:
+    AWS_REGION: us-east-1
+  secrets-manager:
+    ANTHROPIC_API_KEY: mcpeval/anthropic:api_key   # optional
+phases:
+  install:
+    runtime-versions: { python: 3.12 }
+    commands:
+      - pip install "git+https://github.com/AMishradev/MCPEvalSuite" && pipx install semgrep
+  build:
+    commands:
+      - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - mcpeval static . --out out/static --format json,sarif,asff --no-gate
+      - mcpeval scan "stdio:python server.py" --out out/scan --format json,sarif,md,asff --budget-usd 0.50 || echo "GATE_FAILED=1" >> gate.env
+  post_build:
+    commands:
+      - bash ci/aws/securityhub_import.sh out/scan/mcpeval.asff.json
+      - bash ci/aws/securityhub_import.sh out/static/mcpeval.asff.json
+      - if grep -q GATE_FAILED gate.env 2>/dev/null; then echo "mcpeval gate failed"; exit 1; fi
+artifacts:
+  files: ["out/**/*"]

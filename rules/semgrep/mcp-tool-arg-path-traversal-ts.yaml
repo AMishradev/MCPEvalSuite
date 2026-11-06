@@ -1,0 +1,57 @@
+rules:
+  - id: mcp-tool-arg-path-traversal-ts
+    mode: taint
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      An MCP tool argument is used as a filesystem path without validation against
+      an allow-listed root. '../' sequences or absolute paths let a model read or
+      write arbitrary files. Resolve with path.resolve(), then require the result to
+      start with the allowed root (plus realpath for symlinks) before any fs call.
+    metadata:
+      cwe: "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+      category: security
+      subcategory: [vuln]
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+      technology: [mcp, "@modelcontextprotocol/sdk"]
+      references:
+        - https://modelcontextprotocol.io/docs/tutorials/security/local-server-security
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern-inside: $SERVER.registerTool($NAME, $CFG, $HANDLER)
+              - pattern-inside: $SERVER.tool($NAME, ..., $HANDLER)
+          - pattern-either:
+              - pattern: async ($ARGS, ...) => { ... }
+              - pattern: ($ARGS, ...) => { ... }
+              - pattern: async function ($ARGS, ...) { ... }
+          - focus-metavariable: $ARGS
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $FS.readFile($P, ...)
+              - pattern: $FS.readFileSync($P, ...)
+              - pattern: $FS.writeFile($P, ...)
+              - pattern: $FS.writeFileSync($P, ...)
+              - pattern: $FS.promises.readFile($P, ...)
+              - pattern: $FS.promises.writeFile($P, ...)
+              - pattern: $FS.createReadStream($P, ...)
+              - pattern: $FS.createWriteStream($P, ...)
+              - pattern: $FS.unlink($P, ...)
+              - pattern: $FS.rm($P, ...)
+              - pattern: $FS.rmSync($P, ...)
+              - pattern: $FS.readdir($P, ...)
+              - pattern: $FS.readdirSync($P, ...)
+              - pattern: readFile($P, ...)
+              - pattern: readFileSync($P, ...)
+              - pattern: writeFile($P, ...)
+              - pattern: writeFileSync($P, ...)
+          - focus-metavariable: $P
+    pattern-sanitizers:
+      - pattern: path.basename(...)
+      - pattern: validatePath(...)
+      - pattern: safeJoin(...)
+      - pattern: sanitizePath(...)
+      - pattern: resolveWithinRoot(...)

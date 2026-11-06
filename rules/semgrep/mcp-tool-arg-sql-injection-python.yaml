@@ -1,0 +1,46 @@
+rules:
+  - id: mcp-tool-arg-sql-injection-python
+    mode: taint
+    languages: [python]
+    severity: ERROR
+    message: >-
+      An MCP tool argument ($PARAM) is interpolated into a SQL statement that is
+      executed. Use parameterised queries (cursor.execute(sql, params)) or an ORM;
+      never build SQL with f-strings, % formatting, .format() or concatenation
+      from tool arguments.
+    metadata:
+      cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      category: security
+      subcategory: [vuln]
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+      technology: [mcp, fastmcp]
+      references:
+        - https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: |
+                  @$SERVER.tool(...)
+                  def $FUNC(..., $PARAM, ...):
+                      ...
+              - pattern: |
+                  @$SERVER.tool
+                  def $FUNC(..., $PARAM, ...):
+                      ...
+              - pattern: |
+                  @$SERVER.tool(...)
+                  async def $FUNC(..., $PARAM, ...):
+                      ...
+          - focus-metavariable: $PARAM
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $CUR.execute($S, ...)
+              - pattern: $CUR.executemany($S, ...)
+              - pattern: $CUR.executescript($S)
+              - pattern: $CUR.raw($S, ...)
+              - pattern: sqlalchemy.text($S)
+              - pattern: text($S)
+          - focus-metavariable: $S
