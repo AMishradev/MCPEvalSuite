@@ -54,6 +54,16 @@ def _write_reports(result: ScanResult, out: Path, formats: list[str]) -> list[Pa
     return written
 
 
+def _parse_headers(values: list[str]) -> dict[str, str]:
+    out = {}
+    for v in values:
+        k, sep, val = v.partition(":")
+        if not sep:
+            raise typer.BadParameter(f"header must be 'Name: value', got {v!r}")
+        out[k.strip()] = val.strip()
+    return out
+
+
 def _print_summary(result: ScanResult) -> None:
     s = result.summary()
     t = Table(title=f"mcpeval: {result.target}", show_lines=False)
@@ -83,6 +93,7 @@ def scan(
     behavior: bool = typer.Option(False, "--behavior", help="opt-in: invoke tools (sandbox / non-prod only)"),
     timeout: float = typer.Option(30.0, "--timeout"),
     no_gate: bool = typer.Option(False, "--no-gate", help="always exit 0"),
+    header: list[str] = typer.Option([], "--header", "-H", help='HTTP header for remote servers, e.g. -H "apikey: ${LAB_KEY}" (repeatable; ${VAR} expanded)'),
 ) -> None:
     """Probe an MCP server and evaluate it against the policy."""
     from .checks import load_all_checks
@@ -94,13 +105,15 @@ def scan(
     load_all_checks()
     pol = load_policy(policy)
     spec = parse_target(target)
+    spec.headers.update(_parse_headers(header))
     con.print(f"[bold]probe[/bold] {spec} ({spec.kind})")
     manifest = asyncio.run(capture_manifest(spec, timeout=timeout))
     if manifest.errors:
         con.print(f"[yellow]probe errors:[/yellow] {manifest.errors}")
     if spec.kind in ("http", "sse"):
         from .probe.auth import probe_http_auth
-        manifest.http.update(asyncio.run(probe_http_auth(spec.url, headers=spec.headers, timeout=timeout)))
+        from .probe.connect import expand_headers
+        manifest.http.update(asyncio.run(probe_http_auth(spec.url, headers=expand_headers(spec.headers), timeout=timeout)))
     for t in manifest.tools:
         classify_tool(t)
 
@@ -157,12 +170,14 @@ def scan(
 
 
 @baseline_app.command("approve")
-def baseline_approve(target: str, approved_by: str = typer.Option("", "--by"), timeout: float = 30.0) -> None:
+def baseline_approve(target: str, approved_by: str = typer.Option("", "--by"), timeout: float = 30.0,
+                     header: list[str] = typer.Option([], "--header", "-H", help="HTTP header (repeatable)")) -> None:
     """Capture the server's current manifest and store it as the approved baseline."""
     from .policy.loader import BaselineStore
     from .probe.connect import capture_manifest, parse_target
 
     spec = parse_target(target)
+    spec.headers.update(_parse_headers(header))
     m = asyncio.run(capture_manifest(spec, timeout=timeout))
     if m.errors and not m.tools:
         con.print(f"[red]could not capture manifest:[/red] {m.errors}")

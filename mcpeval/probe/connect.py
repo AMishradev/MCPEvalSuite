@@ -24,7 +24,10 @@ from typing import Any
 
 from mcp import types
 from mcp.client.client import Client
+from mcp.client.sse import sse_client
 from mcp.client.stdio import StdioServerParameters
+from mcp.client.streamable_http import streamable_http_client
+from mcp.shared._httpx_utils import create_mcp_http_client
 
 from ..models import PromptRecord, ResourceRecord, ServerManifest, ToolRecord
 
@@ -122,9 +125,19 @@ class Recorder:
             self.m.notifications.append(d)
 
 
+def expand_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Expand ${VAR} references (same convention as client configs) so secrets stay in the environment."""
+    return {k: os.path.expandvars(str(v)) for k, v in (headers or {}).items()}
+
+
 def make_client(spec: TargetSpec, rec: Recorder, *, timeout: float = 30.0) -> Client:
+    headers = expand_headers(spec.headers)
     if spec.kind == "stdio":
         server: Any = StdioServerParameters(command=spec.command, args=spec.args, env={**os.environ, **spec.env}, cwd=spec.cwd)
+    elif spec.kind == "sse":
+        server = sse_client(spec.url, headers=headers or None, timeout=timeout)
+    elif headers:  # authenticated streamable HTTP (gateway API key, bearer token, ...)
+        server = streamable_http_client(spec.url, http_client=create_mcp_http_client(headers=headers))
     else:
         server = spec.url
     return Client(server, mode="auto", read_timeout_seconds=timeout, sampling_callback=rec.on_sample,
